@@ -1,0 +1,25 @@
+{
+  "name": "ring-mqtt",
+  "version": "1.1.0",
+  "description": "Bridge Ring devices to MQTT",
+  "main": "ring-mqtt.js",
+  "dependencies": {
+    "@dgreif/ring-alarm": "^3.8.0",
+    "debug": "^4.1.0",
+    "mqtt": "^3.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ring",
+    "mqtt"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/tsightler/ring-mqtt.git"
+  },
+  "author": "Tom Sightler (tsightler@gmail.com)",
+  "license": "MIT"
+}
