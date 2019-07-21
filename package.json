@@ -4,13 +4,14 @@
   "description": "Bridge Ring devices to MQTT",
   "main": "ring-mqtt.js",
   "dependencies": {
-    "@dgreif/ring-alarm": "^3.8.0",
+    "ring-client-api": "^4.2.1",
     "debug": "^4.1.0",
     "mqtt": "^3.0.0"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ring-mqtt.js"
   },
   "keywords": [
     "ring",

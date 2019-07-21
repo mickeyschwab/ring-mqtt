@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+'use strict'
 
 // Defines
-const RingApi = require('@dgreif/ring-alarm/api').RingApi
+const RingApi = require('ring-client-api').RingApi
 const mqttApi = require ('mqtt')
 const debug = require('debug')('ring-mqtt')
 const debugError = require('debug')('error')
@@ -36,7 +37,7 @@ function sleep(sec) {
 async function processExit(options, exitCode) {
     if (options.cleanup) {
         ringLocations.forEach(async location => {
-            availabilityTopic = ringTopic+'/'+location.locationId+'/status'
+            const availabilityTopic = ringTopic+'/'+location.locationId+'/status'
             mqttClient.publish(availabilityTopic, 'offline')
         })
     }
@@ -70,6 +71,21 @@ async function processLocations(locations) {
             publishDevices(location, alarmDevices)
         }
     })
+}
+
+// Publishes all found devices for a given location
+// On startup/HASS restart message republish at 30 second interval for 10 cycles
+async function publishDevices(location, alarmDevices) {
+    // If republish cycle is complete then set to publish once
+    if (republishCount < 1) { republishCount = 1 }
+    while (republishCount > 0 && publishEnabled && mqttConnected) {
+        // Publish if location has an alarm
+        if (alarmDevices.filter(device => device.data.deviceType === 'security-panel')) publishAlarm(location, alarmDevices)
+        // Publish if location has at least one camera
+        if (location.cameras !== undefined && location.cameras.length > 0) publishCameras(location)
+        await sleep(republishDelay)
+        republishCount--
+    }
 }
 
 // Return class information if supported alarm device
@@ -127,21 +143,6 @@ function getAlarmDeviceBatteryLevel(device) {
         return 'none'
     }
     return 0
-}
-
-// Publishes all found devices for a given location
-// Also republishing at 30 second interval for 10 times on startup or birth message from Home Assistant
-async function publishDevices(location, alarmDevices) {
-    // If republish cycle is complete then set to publish once
-    if (republishCount < 1) { republishCount = 1 }
-    while (republishCount > 0 && publishEnabled && mqttConnected) {
-        // Publish if location has an alarm
-        if (alarmDevices.filter(device => device.data.deviceType === 'security-panel')) publishAlarm(location, alarmDevices)
-        // Publish if location has at least one camera
-        if (location.cameras !== undefined && location.cameras.length > 0) publishCameras(location)
-        await sleep(republishDelay)
-        republishCount--
-    }
 }
 
 // Publish all supported alarm devices for location
@@ -224,7 +225,7 @@ async function publishAlarmDevice(device) {
     // Give Home Assistant time to configure device before sending first state data
     await sleep(2)
 
-    // Publish device statea and, if newly registered device, subscribe to state updates
+    // Publish device state and subscribe to updates if new device
     if (subscribedDevices.find(subscribedDevice => subscribedDevice.zid === device.zid)) {
         publishAlarmDeviceState(device.data, deviceTopic)
     } else {
@@ -295,7 +296,7 @@ function publishAlarmDeviceState(data, deviceTopic) {
 
     // Publish any available device attributes (battery, power, etc)
     const attributes = {}
-    batteryLevel = getAlarmDeviceBatteryLevel(data)
+    const batteryLevel = getAlarmDeviceBatteryLevel(data)
     if (batteryLevel !== 'none') {
         attributes.battery_level = batteryLevel
     }
@@ -392,11 +393,11 @@ async function publishCamera(location, camera) {
         })
         // Subscribe to data updates (only updates at poll interval, default every 20 seconds)
         camera.onData.subscribe(data => {
-            publishCameraState(camera, cameraTopic)
+            publishCameraDevices(camera, cameraTopic)
         })
         camera.subscribed = true
     } else {
-        publishCameraState(camera, cameraTopic)
+        publishCameraDevices(camera, cameraTopic)
     } 
 }
 
@@ -439,6 +440,7 @@ async function publishDingState(camera, cameraTopic, ding) {
         camera[dingType].last_ding = Math.floor(ding.now)
         camera[dingType].ding_duration = ding.expires_in
         camera[dingType].last_ding_expires = camera[dingType].last_ding+ding.expires_in
+        debug('Ding of type '+dingType+' received at '+ding.now+' from camera '+camera.id)
 
         // Publish MQTT active sensor state
         // Will republish to MQTT for new dings even if ding is already active
@@ -452,10 +454,13 @@ async function publishDingState(camera, cameraTopic, ding) {
             // time so code below will loop, check new expire time, and sleep again
             // until all dings expire
             while (Math.floor(Date.now()/1000) < camera[dingType].last_ding_expires) { 
-                sleeptime = camera[dingType].last_ding_expires - Math.floor(Date.now()/1000) + 1
+                const sleeptime = (camera[dingType].last_ding_expires - Math.floor(Date.now()/1000)) + 1
+                debug('Ding of type '+dingType+' from camera '+camera.id+' expires in '+sleeptime)
                 await sleep(sleeptime)
+                debug('Ding of type '+dingType+' from camera '+camera.id+' exired')
             }
-            // All gings have expired, set state back to false/off
+            // All dings have expired, set state back to false/off
+            debug('All dings of type '+dingType+' from camera '+camera.id+' have expired')
             camera[dingType].active_ding = false
             publishMqttState(stateTopic, 'OFF')
         }
@@ -475,7 +480,7 @@ async function publishDingState(camera, cameraTopic, ding) {
 // Publish camera state for polled attributes (light/siren state, etc)
 // Writes state to custom property to keep from publishing state except
 // when values change from previous polling interval
-async function publishCameraState(camera, cameraTopic) {
+async function publishCameraDevices(camera, cameraTopic) {
     if (camera.hasLight) {
         const stateTopic = cameraTopic+'/light/state'
         if (camera.data.led_status !== camera.prev_led_status) { 
@@ -567,16 +572,13 @@ async function setLockTargetState(location, deviceId, message) {
     switch(command) {
         case 'lock':
         case 'unlock':
-            location.setDeviceInfo(deviceId, {
-                command: {
-                    v1: [
-                        {
-                            commandType: `lock.${command}`,
-                            data: {}
-                        }
-                    ]
-                }
-            })
+            const devices = await location.getDevices();
+            const device = devices.find(device => device.id === deviceId);
+            if(!device) {
+                debug('Cannot find specified device id in location devices');
+                break;
+            }
+            device.sendCommand(`lock.${command}`);
             break;
         default:
             debug('Received invalid command for lock!')
@@ -642,7 +644,7 @@ async function processMqttCommand(topic, message) {
 
 // Set camera light on/off
 async function setCameraLight(location, cameraId, message) {
-    camera = location.cameras.find(camera => camera.id == cameraId)
+    const camera = location.cameras.find(camera => camera.id == cameraId)
     switch (message) {
         case 'ON':
             camera.setLight(true)
@@ -657,7 +659,7 @@ async function setCameraLight(location, cameraId, message) {
 
 // Set camera siren on/off
 async function setCameraSiren(location, cameraId, message) {
-    camera = location.cameras.find(camera => camera.id == cameraId)
+    const camera = location.cameras.find(camera => camera.id == cameraId)
     switch (message) {
         case 'ON':
             camera.setSiren(true)
