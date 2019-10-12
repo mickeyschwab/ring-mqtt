@@ -726,7 +726,7 @@ const main = async() => {
             email: CONFIG.ring_user,
             password: CONFIG.ring_pass,
             cameraStatusPollingSeconds: 20,
-            cameraDingsPollingSeconds: 1
+            cameraDingsPollingSeconds: 2
         })
         ringLocations = await ringApi.getLocations()
     } catch (error) {
