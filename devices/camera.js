@@ -166,6 +166,7 @@ class Camera {
         // Is it an active ding?
         if (ding) {
             // Is it a motion or doorbell ding?
+            const dingType = ding.kind
             const stateTopic = componentTopic+'/'+dingType+'_state'
 
             // Store new ding info in camera properties

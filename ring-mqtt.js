@@ -32,10 +32,24 @@ var republishCount = 10 // Republish config/state this many times after startup 
 var republishDelay = 30 // Seconds
 
 // Setup Exit Handwlers
-process.on('exit', utils.processExit.bind(null, {cleanup:true, exit:true}, 0, ringLocations, mqttClient))
-process.on('SIGINT', utils.processExit.bind(null, {cleanup:true, exit:true}, 0, ringLocations, mqttClient))
-process.on('SIGTERM', utils.processExit.bind(null, {cleanup:true, exit:true}, 0, ringLocations, mqttClient))
-process.on('uncaughtException', utils.processExit.bind(null, {exit:true}, 1, ringLocations, mqttClient))
+process.on('exit', processExit.bind(null, {cleanup:true}, 0))
+process.on('SIGINT', processExit.bind(null, {cleanup:true}, 0))
+process.on('SIGTERM', processExit.bind(null, {cleanup:true}, 0))
+process.on('uncaughtException', processExit.bind(null, {cleanup:true}, 1))
+
+// Set unreachable status on exit
+async function processExit(options, exitCode) {
+    if (options.cleanup) {
+        ringLocations.forEach(async location => {
+            availabilityTopic = ringTopic+'/'+location.locationId+'/status'
+            debug(availabilityTopic)
+            mqttClient.publish(availabilityTopic, 'offline')
+        })
+    }
+    if (exitCode || exitCode === 0) debug('Exit code: '+exitCode)
+    await utils.sleep(1)
+    process.exit()
+}
 
 // Establich websocket connections and register/refresh location status on connect/disconnect
 async function processLocations(locations) {
