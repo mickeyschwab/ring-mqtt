@@ -256,7 +256,6 @@ const main = async() => {
 
         // Ring allows users to enable two-factor authentication. If this is
         // enabled, the user/pass authentication will not work.
-        //
         // See: https://github.com/dgreif/ring/wiki/Two-Factor-Auth
         if(CONFIG.ring_token) {
             auth["refreshToken"] = CONFIG.ring_token
