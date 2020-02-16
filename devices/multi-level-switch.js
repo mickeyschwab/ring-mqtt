@@ -59,8 +59,8 @@ class MultiLevelSwitch extends AlarmDevice {
     }
     
     // Process messages from MQTT command topic
-    processCommand(message, stateCmd) {
-        if (stateCmd == 'brightness_command') {
+    processCommand(message, cmdTopicLevel) {
+        if (cmdTopicLevel == 'brightness_command') {
             this.setSwitchLevel(message)
         } else {
             this.setSwitchState(message)

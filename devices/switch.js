@@ -51,7 +51,7 @@ class Switch extends AlarmDevice {
     }
     
     // Process messages from MQTT command topic
-    processCommand(message, stateCmd) {
+    processCommand(message) {
         this.setSwitchState(message)
     }
 

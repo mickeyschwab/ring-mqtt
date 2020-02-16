@@ -182,14 +182,17 @@ async function processMqttMessage(topic, message) {
             debug('Resent device config/state information')
         }
     } else {
-        // Split deviceTopic base and command topic level into separate variables
-        const deviceTopic = topic.replace(new RegExp('/[^/]*$'),'')
-        const stateCmd = topic.split('/').pop()
+        var topic = topic.split('/')
+        // Parse topic to get alarm/component/device info
+        const locationId = topic[topic.length - 5]
+        const component = topic[topic.length - 3]
+        const deviceId = topic[topic.length - 2]
+        const commandTopicLevel = topic[topic.length - 1]
 
         // Find existing device by matching deviceTopic and process command
-        const cmdDevice = subscribedDevices.find(device => device.deviceTopic == deviceTopic)
+        const cmdDevice = subscribedDevices.find(d => (d.deviceId == deviceId && d.locationId == locationId))
         if (cmdDevice) {
-            cmdDevice.processCommand(message, stateCmd)
+            cmdDevice.processCommand(message, commandTopicLevel, component)
         } else {
             debug('Received MQTT message for '+deviceTopic+' but could not find matching device')
         }

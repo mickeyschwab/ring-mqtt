@@ -68,8 +68,8 @@ class Fan extends AlarmDevice {
     }
     
     // Process messages from MQTT command topic
-    processCommand(message, stateCmd) {
-        if (stateCmd == 'speed_command') {
+    processCommand(message, cmdTopicLevel) {
+        if (cmdTopicLevel == 'speed_command') {
             this.setFanLevel(message)
         } else {
             this.setFanState(message)

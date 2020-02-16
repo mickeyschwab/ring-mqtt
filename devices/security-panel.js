@@ -64,7 +64,7 @@ class SecurityPanel extends AlarmDevice {
     }
     
     // Process messages from MQTT command topic
-    processCommand(message, stateCmd) {
+    processCommand(message) {
         this.setAlarmMode(message)
     }
 

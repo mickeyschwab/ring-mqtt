@@ -61,7 +61,7 @@ class Lock extends AlarmDevice {
     }
     
     // Process messages from MQTT command topic
-    processCommand(message, stateCmd) {
+    processCommand(message) {
         this.setLockState(message)
     }
 
