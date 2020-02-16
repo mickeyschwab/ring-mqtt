@@ -7,5 +7,6 @@
     "mqtt_pass": "",
     "ring_user": "",
     "ring_pass": "",
+    "ring_token": "",
     "location_ids": [""]
 }
