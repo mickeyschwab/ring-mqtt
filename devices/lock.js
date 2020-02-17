@@ -10,9 +10,10 @@ class Lock extends AlarmDevice {
 
         // Build required MQTT topics for device
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic = this.deviceTopic+'/state'
-        this.commandTopic = this.deviceTopic+'/command'
+        this.stateTopic = this.deviceTopic+'/lock_state'
+        this.commandTopic = this.deviceTopic+'/lock_command'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'/config'
 
         // Publish discovery message for HA and wait 2 seoonds before sending state
@@ -55,7 +56,7 @@ class Lock extends AlarmDevice {
                 lockState = 'UNKNOWN'
         }
         // Publish device sensor state
-        this.publishState(mqttClient, this.stateTopic, alarmMode)
+        this.publishState(mqttClient, this.stateTopic, lockState)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

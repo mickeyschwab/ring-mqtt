@@ -10,11 +10,12 @@ class Fan extends AlarmDevice {
 
         // Build required MQTT topics for device
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic = this.deviceTopic+'/state'
-        this.commandTopic = this.deviceTopic+'/command'
-        this.speedStateTopic = this.deviceTopic+'/speed_state'
-        this.speedCommandTopic = this.deviceTopic+'/speed_command'
+        this.stateTopic = this.deviceTopic+'/fan_state'
+        this.commandTopic = this.deviceTopic+'/fan_command'
+        this.speedStateTopic = this.deviceTopic+'/fan_speed_state'
+        this.speedCommandTopic = this.deviceTopic+'/fan_speed_command'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'/config'
 
         // Publish discovery message for HA and wait 2 seoonds before sending state
@@ -69,10 +70,12 @@ class Fan extends AlarmDevice {
     
     // Process messages from MQTT command topic
     processCommand(message, cmdTopicLevel) {
-        if (cmdTopicLevel == 'speed_command') {
+        if (cmdTopicLevel == 'fan_command') {
+            this.setFanState(message)
+        } else if (cmdTopicLevel == 'fan_speed_command') {
             this.setFanLevel(message)
         } else {
-            this.setFanState(message)
+            debug('Somehow received unknown command topic level '+cmdTopicLevel+' for fan Id: '+this.deviceId)
         }
     }
 

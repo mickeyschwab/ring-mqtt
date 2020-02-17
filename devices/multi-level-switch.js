@@ -10,11 +10,12 @@ class MultiLevelSwitch extends AlarmDevice {
 
         // Build required MQTT topics for device
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic = this.deviceTopic+'/state'
-        this.commandTopic = this.deviceTopic+'/command'
+        this.stateTopic = this.deviceTopic+'/switch_state'
+        this.commandTopic = this.deviceTopic+'/switch_command'
         this.brightessStateTopic = this.deviceTopic+'/brightness_state'
         this.brightnessCommandTopic = this.deviceTopic+'/brightness_command'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'/config'
 
         // Publish discovery message for HA and wait 2 seoonds before sending state
@@ -60,10 +61,12 @@ class MultiLevelSwitch extends AlarmDevice {
     
     // Process messages from MQTT command topic
     processCommand(message, cmdTopicLevel) {
-        if (cmdTopicLevel == 'brightness_command') {
+        if (cmdTopicLevel == 'switch_command') {
+            this.setSwitchState(message)
+        } else if (cmdTopicLevel == 'brightness_command') {
             this.setSwitchLevel(message)
         } else {
-            this.setSwitchState(message)
+            debug('Somehow received unknown command topic level '+cmdTopicLevel+' for switch Id: '+this.deviceId)
         }
     }
 

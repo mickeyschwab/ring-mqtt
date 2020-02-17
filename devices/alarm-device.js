@@ -1,5 +1,6 @@
 const debug = require('debug')('ring-mqtt')
-const colors = require( 'colors/safe' )
+const colors = require('colors/safe')
+const utils = require('../lib/utils')
 
 class AlarmDevice {
     constructor(device, ringTopic) {
@@ -9,7 +10,7 @@ class AlarmDevice {
         this.locationId = this.device.location.locationId
         this.deviceId = this.device.zid
         this.alarmTopic = ringTopic+'/'+this.locationId+'/alarm'
-        this.availabilityTopic = ringTopic+'/'+this.locationId+'/status'
+        this.availabilityState = 'offline'
     }
 
     // Return batterylevel or convert battery status to estimated level
@@ -49,6 +50,8 @@ class AlarmDevice {
             })
             this.subscribed = true
         }
+        // Publish availability state for device
+        this.online(mqttClient)
     }
 
     // Publish device attributes
@@ -64,6 +67,20 @@ class AlarmDevice {
         debug(this.attributesTopic, attributes)
         this.mqttPublish(mqttClient, this.attributesTopic, JSON.stringify(attributes))
     }
+
+    // Set state topic online
+    async online(mqttClient) {
+        await utils.sleep(1)
+        this.availabilityState = 'online'
+        this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+    }
+
+    // Set state topic offline
+    offline(mqttClient) {
+        this.availabilityState = 'offline'
+        this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+    }
+
 }
 
 module.exports = AlarmDevice

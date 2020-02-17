@@ -10,16 +10,19 @@ class ContactSensor extends AlarmDevice {
         if (this.device.deviceType == 'sensor.zone') {
             // Device is Retrofit Zone sensor
             this.className = 'safety'
+            this.sensorType = 'zone'
         } else {
             // Device is contact sensor
             // If device name includes "window" then use window class, otherwise assume door class
             this.className = (this.device.name.match(/window/i)) ? 'window' : 'door'
+            this.sensorType = 'contact'
         }
 
         // Build required MQTT topics for device
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic = this.deviceTopic+'/state'
+        this.stateTopic = this.deviceTopic+'/'+this.sensorType+'_state'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'/config'
 
         // Publish discovery message for HA and wait 2 seoonds before sending state

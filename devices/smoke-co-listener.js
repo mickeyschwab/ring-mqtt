@@ -14,8 +14,9 @@ class SmokeCoListener extends AlarmDevice {
         // Build a save MQTT topics for future use
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
         this.stateTopic_smoke = this.deviceTopic+'/smoke_state'
-        this.stateTopic_co = this.deviceTopic+'/gas_state'
+        this.stateTopic_co = this.deviceTopic+'/co_state'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic_smoke = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'_smoke/config'
         this.configTopic_co = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'_gas/config'
 

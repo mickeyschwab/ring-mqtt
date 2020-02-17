@@ -10,9 +10,10 @@ class SecurityPanel extends AlarmDevice {
 
         // Build required MQTT topics for device
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic = this.deviceTopic+'/state'
-        this.commandTopic = this.deviceTopic+'/command'
+        this.stateTopic = this.deviceTopic+'/alarm_state'
+        this.commandTopic = this.deviceTopic+'/alarm_command'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'/config'
 
         // Publish discovery message for HA and wait 2 seoonds before sending state

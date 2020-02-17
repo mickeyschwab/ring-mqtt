@@ -12,7 +12,8 @@ class Camera {
         this.locationId = this.camera.data.location_id
         this.deviceId = this.camera.data.device_id
         this.cameraTopic = ringTopic+'/'+this.locationId+'/camera'
-        this.availabilityTopic = ringTopic+'/'+this.locationId+'/status'
+        this.availabilityTopic = this.cameraTopic+'/'+this.deviceId+'/status'
+        this.availabilityState = 'offline'
 
         // Create properties to store motion ding state
         this.motion = {
@@ -110,7 +111,9 @@ class Camera {
                 })
             }
             this.subscribed = true
-            this.monitorDingSubscriptions()
+
+            // Start monitor of availability state for device
+            this.monitorDingSubscriptions(mqttClient)
         } else {
             this.publishDingState(mqttClient)
             if (this.camera.hasLight || this.camera.hasSiren) {
@@ -119,6 +122,9 @@ class Camera {
                 this.publishPolledState(mqttClient)
             }
         }
+
+        // Publish availability state for device
+        this.online(mqttClient)
 }
 
     // Publish state messages with debug
@@ -127,14 +133,10 @@ class Camera {
         mqttClient.publish(topic, state, { qos: 1 })
     }
 
-    // Build and publish a Home Assistant MQTT discovery packet for camera feature
+    // Build and publish a Home Assistant MQTT discovery packet for camera capability
     publishCapability(mqttClient, capability) {
-        var componentPrefix = ''
-        if (capability.component == 'binary_sensor') {
-            var componentPrefix = capability.type+'_'
-        }
 
-        const componentTopic = this.cameraTopic+'/'+capability.component+'/'+this.deviceId+'/'+componentPrefix
+        const componentTopic = this.cameraTopic+'/'+capability.component+'/'+this.deviceId
         const configTopic = 'homeassistant/'+capability.component+'/'+this.locationId+'/'+this.deviceId+'_'+capability.type+'/config'
 
         const message = {
@@ -143,13 +145,13 @@ class Camera {
             availability_topic: this.availabilityTopic,
             payload_available: 'online',
             payload_not_available: 'offline',
-            state_topic: componentTopic+'state'
+            state_topic: componentTopic+'/'+capability.type+'_state'
         }
 
         if (capability.className) { message.device_class = capability.className }
 
         if (capability.hasCommand) {
-            const commandTopic = componentTopic+'command'
+            const commandTopic = componentTopic+'/'+capability.type+'_command'
             message.command_topic = commandTopic
             mqttClient.subscribe(commandTopic)
         }
@@ -212,7 +214,7 @@ class Camera {
     publishPolledState(mqttClient) {
         if (this.camera.hasLight) {
             const componentTopic = this.cameraTopic+'/light/'+this.deviceId
-            const stateTopic = componentTopic+'/state'
+            const stateTopic = componentTopic+'/light_state'
             if (this.camera.data.led_status !== this.publishedLightState) {
                 this.publishState(mqttClient, stateTopic, (this.camera.data.led_status === 'on' ? 'ON' : 'OFF'))
                 this.publishedLightState = this.camera.data.led_status
@@ -220,7 +222,7 @@ class Camera {
         }
         if (this.camera.hasSiren) {
             const componentTopic = this.cameraTopic+'/switch/'+this.deviceId
-            const stateTopic = componentTopic+'/state'
+            const stateTopic = componentTopic+'/siren_state'
             const sirenStatus = this.camera.data.siren_status.seconds_remaining > 0 ? 'ON' : 'OFF'
             if (sirenStatus !== this.publishedSirenState) {
                 this.publishState(mqttClient, stateTopic, sirenStatus)
@@ -231,19 +233,20 @@ class Camera {
 
     // Monitor subscriptions to ding/motion events and attempt resubscribe if false
     monitorDingSubscriptions() {
-        const _camera = this.camera
+        const _this = this
         setInterval(function() {
-            if (!_camera.data.subscribed === true) {
-                debug('Camera Id '+_camera.data.device_id+' lost subscription to ding events, attempting to resubscribe...')
-                _camera.subscribeToDingEvents().catch(e => { 
-                    debug('Failed to resubscribe camera Id ' +_camera.data.device_id+' to ding events. Will retry in 60 seconds.') 
+            const camera = _this.camera
+            if (!camera.data.subscribed === true) {
+                debug('Camera Id '+camera.data.device_id+' lost subscription to ding events, attempting to resubscribe...')
+                camera.subscribeToDingEvents().catch(e => { 
+                    debug('Failed to resubscribe camera Id ' +camera.data.device_id+' to ding events. Will retry in 60 seconds.') 
                     debug(e)
                 })
             }
-            if (!_camera.data.subscribed_motions === true) {
-                debug('Camera Id '+_camera.data.device_id+' lost subscription to motion events, attempting to resubscribe...')
-                _camera.subscribeToMotionEvents().catch(e => {
-                    debug('Failed to resubscribe camera Id '+_camera.data.device_id+' to motion events.  Will retry in 60 seconds.')
+            if (!camera.data.subscribed_motions === true) {
+                debug('Camera Id '+camera.data.device_id+' lost subscription to motion events, attempting to resubscribe...')
+                camera.subscribeToMotionEvents().catch(e => {
+                    debug('Failed to resubscribe camera Id '+camera.data.device_id+' to motion events.  Will retry in 60 seconds.')
                     debug(e)
                 })
             }
@@ -251,13 +254,16 @@ class Camera {
     }
 
     // Process messages from MQTT command topic
-    processCommand(message, cmdTopicLevel, component) {
-        if (component == 'light' && cmdTopicLevel == 'command') {
-            this.setLightState(message)
-        } else if (component == 'switch' && cmdTopicLevel == 'command') {
-            this.setSirenState(message)
-        } else {
-            debug('Somehow received message to unknown state topic for camera Id: '+this.deviceId)
+    processCommand(message, cmdTopicLevel) {
+        switch(cmdTopicLevel) {
+            case 'light_command':
+                this.setLightState(message)
+                break;
+            case 'siren_command':
+                this.setSirenState(message)
+                break;
+            default:
+                debug('Somehow received message to unknown state topic for camera Id: '+this.deviceId)
         }
     }
 
@@ -291,6 +297,18 @@ class Camera {
             default:
                 debug('Received unkonw command for light on camera ID '+this.deviceId)
         }
+    }
+
+    // Set state topic online
+    async online(mqttClient) {
+        await utils.sleep(1)
+        this.availabilityState = 'online'
+        this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+    }
+    // Set state topic offline
+    offline(mqttClient) {
+        this.availabilityState = 'offline'
+        this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
     }
 }
 

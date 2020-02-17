@@ -13,11 +13,12 @@ class FloodFreezeSensor extends AlarmDevice {
 
         // Build a save MQTT topics for future use
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic_flood = this.deviceTopic+'/moisture_state'
-        this.stateTopic_freeze = this.deviceTopic+'/cold_state'
+        this.stateTopic_flood = this.deviceTopic+'/flood_state'
+        this.stateTopic_freeze = this.deviceTopic+'/freeze_state'
         this.attributesTopic = this.deviceTopic+'/attributes'
-        this.configTopic_flood = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'_moisture/config'
-        this.configTopic_freeze = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'_cold/config'
+        this.availabilityTopic = this.deviceTopic+'/status'
+        this.configTopic_flood = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'_flood/config'
+        this.configTopic_freeze = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'_freeze/config'
 
         this.publishDiscovery(mqttClient)
         await utils.sleep(2)

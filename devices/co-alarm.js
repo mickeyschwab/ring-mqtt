@@ -4,22 +4,24 @@ const utils = require( '../lib/utils' )
 const AlarmDevice = require('./alarm-device')
 
 class CoAlarm extends AlarmDevice {
+
     async init(mqttClient) {
-        // Home Assistant component type and device class (set appropriate icon)
+       // Home Assistant component type and device class (set appropriate icon)
         this.component = 'binary_sensor'
         this.className = 'gas'
 
         // Build required MQTT topics for device
         this.deviceTopic = this.alarmTopic+'/'+this.component+'/'+this.deviceId
-        this.stateTopic = this.deviceTopic+'/state'
+        this.stateTopic = this.deviceTopic+'/co_state'
         this.attributesTopic = this.deviceTopic+'/attributes'
+        this.availabilityTopic = this.deviceTopic+'/status'
         this.configTopic = 'homeassistant/'+this.component+'/'+this.locationId+'/'+this.deviceId+'/config'
 
         // Publish discovery message for HA and wait 2 seoonds before sending state
         this.publishDiscovery(mqttClient)
         await utils.sleep(2)
 
-        // Publish device state data with optional subscribe 
+        // Publish device state data with optional subscribe
         this.publishSubscribeDevice(mqttClient)
     }
 
