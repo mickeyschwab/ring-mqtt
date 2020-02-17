@@ -32,20 +32,16 @@ var republishCount = 10 // Republish config/state this many times after startup 
 var republishDelay = 30 // Seconds
 
 // Setup Exit Handwlers
-process.on('exit', processExit.bind(null, {cleanup:true}, 0))
-process.on('SIGINT', processExit.bind(null, {cleanup:true}, 0))
-process.on('SIGTERM', processExit.bind(null, {cleanup:true}, 0))
-process.on('uncaughtException', processExit.bind(null, {cleanup:true}, 1))
+process.on('exit', processExit.bind(null, 0))
+process.on('SIGINT', processExit.bind(null, 0))
+process.on('SIGTERM', processExit.bind(null, 0))
+process.on('uncaughtException', processExit.bind(null, 1))
 
 // Set unreachable status on exit
 async function processExit(options, exitCode) {
-    if (options.cleanup) {
-        ringLocations.forEach(async location => {
-            availabilityTopic = ringTopic+'/'+location.locationId+'/status'
-            debug(availabilityTopic)
-            mqttClient.publish(availabilityTopic, 'offline')
-        })
-    }
+    subscribedDevices.forEach(subscribedDevice => {
+        subscribedDevice.offline(mqttClient)
+    })
     if (exitCode || exitCode === 0) debug('Exit code: '+exitCode)
     await utils.sleep(1)
     process.exit()
@@ -56,7 +52,6 @@ async function processLocations(locations) {
     ringLocations.forEach(async location => {
         const devices = await location.getDevices()
         const cameras = await location.cameras
-        const availabilityTopic = ringTopic+'/'+location.locationId+'/status'
         if (!(subscribedLocations.includes(location.locationId))) {
             var alarmPublished = false
             subscribedLocations.push(location.locationId)
@@ -65,26 +60,30 @@ async function processLocations(locations) {
                     if (connected) {
                         debug('Location '+location.locationId+' is connected')
                         publishAlarm = true
-                        publishLocation(devices, cameras, availabilityTopic)
+                        publishLocation(devices, cameras)
                         alarmPublished = true
                     } else {
                         publishAlarm = false
-                        mqttClient.publish(availabilityTopic, 'offline', { qos: 1 })
                         debug('Location '+location.locationId+' is disconnected')
+                        subscribedDevices.forEach(async subscribedDevice => {
+                            if (subscribedDevice.device) {
+                                subscribedDevice.offline(mqttClient)
+                            }
+                        })
                     }
                 })
             }
             if (cameras && cameras.length > 0 && !alarmPublished) {
-                publishLocation(devices, cameras, availabilityTopic)
+                publishLocation(devices, cameras)
             }
         } else {
-            publishLocation(devices, cameras, availabilityTopic)
+            publishLocation(devices, cameras)
         }
     })
 }
 
 // Loop through locations to publish alarms/cameras
-async function publishLocation(devices, cameras, availabilityTopic) {
+async function publishLocation(devices, cameras) {
     if (republishCount < 1) { republishCount = 1 }
     while (republishCount > 0 && mqttConnected) {
        try {
@@ -97,7 +96,6 @@ async function publishLocation(devices, cameras, availabilityTopic) {
                 publishCameras(cameras)
             }
             await utils.sleep(1)
-            mqttClient.publish(availabilityTopic, 'online', { qos: 1 })
         } catch (error) {
                 debug(error)
         }
@@ -197,18 +195,20 @@ async function processMqttMessage(topic, message) {
         }
     } else {
         var topic = topic.split('/')
-        // Parse topic to get alarm/component/device info
+        // Parse topic to get location/device ID
         const locationId = topic[topic.length - 5]
-        const component = topic[topic.length - 3]
         const deviceId = topic[topic.length - 2]
+
+        // Some devices use the command topic level to determine the device action
         const commandTopicLevel = topic[topic.length - 1]
 
-        // Find existing device by matching deviceTopic and process command
+        // Find existing device by matching location & device ID
         const cmdDevice = subscribedDevices.find(d => (d.deviceId == deviceId && d.locationId == locationId))
+
         if (cmdDevice) {
-            cmdDevice.processCommand(message, commandTopicLevel, component)
+            cmdDevice.processCommand(message, commandTopicLevel)
         } else {
-            debug('Received MQTT message for '+deviceTopic+' but could not find matching device')
+            debug('Received MQTT message for device Id '+deviceId+' at location Id '+locationId+' but could not find matching device')
         }
     }
 }

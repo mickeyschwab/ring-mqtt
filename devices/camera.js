@@ -301,14 +301,18 @@ class Camera {
 
     // Set state topic online
     async online(mqttClient) {
-        await utils.sleep(1)
-        this.availabilityState = 'online'
-        this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+        if (this.availabilityState !== 'online') {
+            await utils.sleep(1)
+            this.availabilityState = 'online'
+            this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+        }
     }
     // Set state topic offline
     offline(mqttClient) {
-        this.availabilityState = 'offline'
-        this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+        if (this.availabilityState !== 'offline') {
+            this.availabilityState = 'offline'
+            this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
+        }
     }
 }
 
