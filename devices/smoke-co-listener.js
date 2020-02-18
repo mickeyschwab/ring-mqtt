@@ -55,12 +55,12 @@ class SmokeCoListener extends AlarmDevice {
         // Publish smoke sensor
         debug('HASS config topic: '+this.configTopic_smoke)
         debug(message_smoke)
-        this.mqttPublish(mqttClient, this.configTopic_smoke, JSON.stringify(message_smoke))
+        this.publishMqtt(mqttClient, this.configTopic_smoke, JSON.stringify(message_smoke))
 
         // Publish CO sensor
         debug('HASS config topic: '+this.configTopic_co)
         debug(message_co)
-        this.mqttPublish(mqttClient, this.configTopic_co, JSON.stringify(message_co))
+        this.publishMqtt(mqttClient, this.configTopic_co, JSON.stringify(message_co))
     }
 
     publishData(mqttClient) {
@@ -68,8 +68,8 @@ class SmokeCoListener extends AlarmDevice {
         const coState = this.device.data.co && this.device.data.co.alarmStatus === 'active' ? 'ON' : 'OFF'
 
         // Publish sensor states
-        this.publishState(mqttClient, this.stateTopic_smoke, smokeState)
-        this.publishState(mqttClient, this.stateTopic_co, coState)
+        this.publishMqtt(mqttClient, this.stateTopic_smoke, smokeState, true)
+        this.publishMqtt(mqttClient, this.stateTopic_co, coState, true)
 
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)

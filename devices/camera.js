@@ -128,9 +128,9 @@ class Camera {
 }
 
     // Publish state messages with debug
-    publishState(mqttClient, topic, state) {
-        debug(topic, state)
-        mqttClient.publish(topic, state, { qos: 1 })
+    publishMqtt(mqttClient, topic, message, isDebug) {
+        if (isDebug) { debug(topic, message) }
+        mqttClient.publish(topic, message, { qos: 1 })
     }
 
     // Build and publish a Home Assistant MQTT discovery packet for camera capability
@@ -179,7 +179,7 @@ class Camera {
 
             // Publish MQTT active sensor state
             // Will republish to MQTT for new dings even if ding is already active
-            this.publishState(mqttClient, stateTopic, 'ON')
+            this.publishMqtt(mqttClient, stateTopic, 'ON', true)
 
             // If ding was not already active, set active ding state property
             // and begin sleep until expire time.
@@ -197,13 +197,13 @@ class Camera {
                 // All dings have expired, set state back to false/off
                 debug('All dings of type '+dingType+' from camera '+this.deviceId+' have expired')
                 this[dingType].active_ding = false
-                this.publishState(mqttClient, stateTopic, 'OFF')
+                this.publishMqtt(mqttClient, stateTopic, 'OFF', true)
             }
         } else {
             // Not an active ding so just publish existing ding state
-            this.publishState(mqttClient, componentTopic+'/motion_state', (this.motion.active_ding ? 'ON' : 'OFF'))
+            this.publishMqtt(mqttClient, componentTopic+'/motion_state', (this.motion.active_ding ? 'ON' : 'OFF'), true)
             if (this.camera.isDoorbot) {
-                this.publishState(mqttClient, componentTopic+'/ding_state', (this.ding.active_ding ? 'ON' : 'OFF'))
+                this.publishMqtt(mqttClient, componentTopic+'/ding_state', (this.ding.active_ding ? 'ON' : 'OFF'), true)
             }
         }
     }
@@ -216,7 +216,7 @@ class Camera {
             const componentTopic = this.cameraTopic+'/light/'+this.deviceId
             const stateTopic = componentTopic+'/light_state'
             if (this.camera.data.led_status !== this.publishedLightState) {
-                this.publishState(mqttClient, stateTopic, (this.camera.data.led_status === 'on' ? 'ON' : 'OFF'))
+                this.publishMqtt(mqttClient, stateTopic, (this.camera.data.led_status === 'on' ? 'ON' : 'OFF'), true)
                 this.publishedLightState = this.camera.data.led_status
             }
         }
@@ -225,7 +225,7 @@ class Camera {
             const stateTopic = componentTopic+'/siren_state'
             const sirenStatus = this.camera.data.siren_status.seconds_remaining > 0 ? 'ON' : 'OFF'
             if (sirenStatus !== this.publishedSirenState) {
-                this.publishState(mqttClient, stateTopic, sirenStatus)
+                this.publishMqtt(mqttClient, stateTopic, sirenStatus, true)
                 this.publishedSirenState = sirenStatus
             }
         }
@@ -301,18 +301,21 @@ class Camera {
 
     // Set state topic online
     async online(mqttClient) {
-        if (this.availabilityState !== 'online') {
-            await utils.sleep(1)
-            this.availabilityState = 'online'
-            this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
-        }
+        let isDebug = true
+        // Ugly hack to keep from spamming debug log on every republish when there's no state change
+        if (this.availabilityState == 'online') { isDebug = false }
+        await utils.sleep(1)
+        this.availabilityState = 'online'
+        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, isDebug)
     }
+
     // Set state topic offline
     offline(mqttClient) {
-        if (this.availabilityState !== 'offline') {
-            this.availabilityState = 'offline'
-            this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
-        }
+        let isDebug = true
+        // Ugly hack to keep from spamming debug log on every republish when there's no state change
+        if (this.availabilityState == 'offline') { isDebug = false }
+        this.availabilityState = 'offline'
+        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, isDebug)
     }
 }
 

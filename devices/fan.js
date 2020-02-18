@@ -43,7 +43,7 @@ class Fan extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
         mqttClient.subscribe(this.commandTopic)
         mqttClient.subscribe(this.speedCommandTopic)
     }
@@ -62,8 +62,8 @@ class Fan extends AlarmDevice {
             fanLevel = 'unknown'
         }
         // Publish device state
-        this.publishState(mqttClient, this.stateTopic, fanState)
-        this.publishState(mqttClient, this.speedStateTopic, fanLevel)
+        this.publishMqtt(mqttClient, this.stateTopic, fanState, true)
+        this.publishMqtt(mqttClient, this.speedStateTopic, fanLevel, true)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

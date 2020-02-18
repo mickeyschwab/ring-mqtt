@@ -39,14 +39,14 @@ class Switch extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
         mqttClient.subscribe(this.commandTopic)
     }
 
     publishData(mqttClient) {
         const switchState = this.device.data.on ? "ON" : "OFF" 
         // Publish device sensor state
-        this.publishState(mqttClient, this.stateTopic, switchState)
+        this.publishMqtt(mqttClient, this.stateTopic, switchState, true)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

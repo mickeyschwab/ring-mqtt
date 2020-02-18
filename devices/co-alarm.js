@@ -40,13 +40,13 @@ class CoAlarm extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
     }
 
     publishData(mqttClient) {
         const coState = this.device.data.alarmStatus === 'active' ? 'ON' : 'OFF'
         // Publish sensor state
-        this.publishState(mqttClient, this.stateTopic, coState)
+        this.publishMqtt(mqttClient, this.stateTopic, coState, true)
         // Publish attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

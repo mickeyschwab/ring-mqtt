@@ -28,15 +28,10 @@ class AlarmDevice {
         return 0
     }
 
-    // Publish raw MQTT message without debug
-    mqttPublish(mqttClient, topic, message) {
-        mqttClient.publish(topic, message, { qos: 1 })
-    }
-
     // Publish state messages with debug
-    publishState(mqttClient, topic, state) {
-        debug(topic, state)
-        this.mqttPublish(mqttClient, topic, state)
+    publishMqtt(mqttClient, topic, message, isDebug) {
+        if (isDebug) { debug(topic, message) }
+        mqttClient.publish(topic, message, { qos: 1 })
     }
 
     // Publish device state data and subscribe to
@@ -64,25 +59,26 @@ class AlarmDevice {
         if (this.device.data.tamperStatus) {
             attributes.tamper_status = this.device.data.tamperStatus
         }
-        debug(this.attributesTopic, attributes)
-        this.mqttPublish(mqttClient, this.attributesTopic, JSON.stringify(attributes))
+        this.publishMqtt(mqttClient, this.attributesTopic, JSON.stringify(attributes), true)
     }
 
     // Set state topic online
     async online(mqttClient) {
-        if (this.availabilityState !== 'online') {
-            await utils.sleep(1)
-            this.availabilityState = 'online'
-            this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
-        }
+        let isDebug = true
+        // Ugly hack to keep from spamming debug log on every republish when there's no state change 
+        if (this.availabilityState == 'online') { isDebug = false }
+        await utils.sleep(1)
+        this.availabilityState = 'online'
+        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, isDebug)
     }
 
     // Set state topic offline
     offline(mqttClient) {
-        if (this.availabilityState !== 'offline') {
-            this.availabilityState = 'offline'
-            this.publishState(mqttClient, this.availabilityTopic, this.availabilityState)
-        }
+        let isDebug = true
+        // Ugly hack to keep from spamming debug log on every republish when there's no state change
+        if (this.availabilityState == 'offline') { isDebug = false }
+        this.availabilityState = 'offline'
+        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, isDebug)
     }
 }
 

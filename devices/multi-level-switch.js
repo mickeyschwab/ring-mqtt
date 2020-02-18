@@ -44,7 +44,7 @@ class MultiLevelSwitch extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
         mqttClient.subscribe(this.commandTopic)
         mqttClient.subscribe(this.brightnessCommandTopic)
     }
@@ -53,8 +53,8 @@ class MultiLevelSwitch extends AlarmDevice {
         const switchState = this.device.data.on ? "ON" : "OFF"
         const switchLevel = (this.device.data.level && !isNaN(this.device.data.level) ? 100 * data.level : 0) 
         // Publish device state
-        this.publishState(mqttClient, this.stateTopic, switchState)
-        this.publishState(mqttClient, this.brightnessStateTopic, switchLevel.toString())
+        this.publishMqtt(mqttClient, this.stateTopic, switchState, true)
+        this.publishMqtt(mqttClient, this.brightnessStateTopic, switchLevel.toString(), true)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

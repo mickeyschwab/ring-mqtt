@@ -39,13 +39,13 @@ class SmokeAlarm extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
     }
 
     publishData(mqttClient) {
         const smokeState = this.device.data.alarmStatus === 'active' ? 'ON' : 'OFF'
         // Publish device sensor state
-        this.publishState(mqttClient, this.stateTopic, smokeState)
+        this.publishMqtt(mqttClient, this.stateTopic, smokeState, true)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

@@ -39,7 +39,7 @@ class SecurityPanel extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
         mqttClient.subscribe(this.commandTopic)
     }
 
@@ -59,7 +59,7 @@ class SecurityPanel extends AlarmDevice {
                 alarmMode = 'unknown'
         }
         // Publish device sensor state
-        this.publishState(mqttClient, this.stateTopic, alarmMode)
+        this.publishMqtt(mqttClient, this.stateTopic, alarmMode, true)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

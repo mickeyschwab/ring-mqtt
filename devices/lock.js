@@ -39,7 +39,7 @@ class Lock extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
         mqttClient.subscribe(this.commandTopic)
     }
 
@@ -56,7 +56,7 @@ class Lock extends AlarmDevice {
                 lockState = 'UNKNOWN'
         }
         // Publish device sensor state
-        this.publishState(mqttClient, this.stateTopic, lockState)
+        this.publishMqtt(mqttClient, this.stateTopic, lockState, true)
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

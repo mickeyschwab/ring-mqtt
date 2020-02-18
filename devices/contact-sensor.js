@@ -48,13 +48,13 @@ class ContactSensor extends AlarmDevice {
 
         debug('HASS config topic: '+this.configTopic)
         debug(message)
-        this.mqttPublish(mqttClient, this.configTopic, JSON.stringify(message))
+        this.publishMqtt(mqttClient, this.configTopic, JSON.stringify(message))
     }
 
     publishData(mqttClient) {
         const contactState = this.device.data.faulted ? 'ON' : 'OFF'
         // Publish sensor state
-        this.publishState(mqttClient, this.stateTopic, contactState)
+        this.publishMqtt(mqttClient, this.stateTopic, contactState, true)
         // Publish attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
     }

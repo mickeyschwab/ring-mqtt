@@ -55,12 +55,12 @@ class FloodFreezeSensor extends AlarmDevice {
         // Publish flood sensor
         debug('HASS config topic: '+this.configTopic_flood)
         debug(message_flood)
-        this.mqttPublish(mqttClient, this.configTopic_flood, JSON.stringify(message_flood))
+        this.publishMqtt(mqttClient, this.configTopic_flood, JSON.stringify(message_flood))
 
         // Publish freeze sensor
         debug('HASS config topic: '+this.configTopic_freeze)
         debug(message_freeze)
-        this.mqttPublish(mqttClient, this.configTopic_freeze, JSON.stringify(message_freeze))
+        this.publishMqtt(mqttClient, this.configTopic_freeze, JSON.stringify(message_freeze))
     }
 
     publishData(mqttClient) {
@@ -68,8 +68,8 @@ class FloodFreezeSensor extends AlarmDevice {
         const freezeState = this.device.data.freeze && this.device.data.freeze.faulted ? 'ON' : 'OFF'
 
         // Publish sensor states
-        this.publishState(mqttClient, this.stateTopic_flood, floodState)
-        this.publishState(mqttClient, this.stateTopic_freeze, freezeState)
+        this.publishMqtt(mqttClient, this.stateTopic_flood, floodState, true)
+        this.publishMqtt(mqttClient, this.stateTopic_freeze, freezeState, true)
 
         // Publish device attributes (batterylevel, tamper status)
         this.publishAttributes(mqttClient)
