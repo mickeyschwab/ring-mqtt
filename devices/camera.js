@@ -46,8 +46,7 @@ class Camera {
     }
 
 
-    // Register all camera functions via HomeAssistant MQTT Discovery
-    // and subscribe to command topic if function accepts commands (lights, siren)
+    // Initialize camera by publishing capabilities and state and subscribing to events
     async init(mqttClient) {
 
         // Publish motion sensor feature for camera
@@ -60,7 +59,7 @@ class Camera {
         }
         this.publishCapability(mqttClient, capability)
 
-        // If camera is also a doorbell publish the doorbell sensor
+        // If camera is a doorbell publish doorbell sensor
         if (this.camera.isDoorbot) {
             capability = {
                 type: 'ding',
@@ -91,7 +90,7 @@ class Camera {
                 suffix: 'Siren',
                 hasCommand: true
             }
-            this.publishCapability(mqttClient, capability)
+            this.publishCapability(mqttClient, capability) 
         }
 
         // Give Home Assistant time to configure device before sending first state data
@@ -103,9 +102,11 @@ class Camera {
             this.camera.onNewDing.subscribe(ding => {
                 this.publishDingState(mqttClient, ding)
             })
+            // Since this is initial publish of device publish ding state as well
             this.publishDingState(mqttClient)
+
+            // If camers as light/siren subsribed to those events as well (only polls, default 20 seconds)
             if (this.camera.hasLight || this.camera.hasSiren) {
-                // Subscribe to data updates (only updates at poll interval, default every 20 seconds)
                 this.camera.onData.subscribe(data => {
                     this.publishPolledState(mqttClient)
                 })
@@ -113,23 +114,25 @@ class Camera {
             this.subscribed = true
 
             // Start monitor of availability state for device
-            this.monitorDingSubscriptions(mqttClient)
+            this.monitorCameraConnection(mqttClient)
+
+            // Set camera online (sends availability status via MQTT)
+            this.online(mqttClient)
         } else {
+            // Pulish all data states and availability state for camera
             this.publishDingState(mqttClient)
             if (this.camera.hasLight || this.camera.hasSiren) {
-                this.publishedLightState = 'republish'
-                this.publishedSirenState = 'republish'
+                if (this.camera.hasLight) { this.publishedLightState = 'republish' }
+                if (this.camera.hasSiren) { this.publishedSirenState = 'republish' }
                 this.publishPolledState(mqttClient)
             }
+            this.publishAvailabilityState(mqttClient)
         }
-
-        // Publish availability state for device
-        this.online(mqttClient)
 }
 
-    // Publish state messages with debug
-    publishMqtt(mqttClient, topic, message, isDebug) {
-        if (isDebug) { debug(topic, message) }
+    // Publish state messages via MQTT with optional debug
+    publishMqtt(mqttClient, topic, message, enableDebug) {
+        if (enableDebug) { debug(topic, message) }
         mqttClient.publish(topic, message, { qos: 1 })
     }
 
@@ -165,15 +168,16 @@ class Camera {
     async publishDingState(mqttClient, ding) {
         const componentTopic = this.cameraTopic+'/binary_sensor/'+this.deviceId
 
-        // Is it an active ding?
+        // Is it an active ding (i.e. from a subscribed event)?
         if (ding) {
             // Is it a motion or doorbell ding?
             const dingType = ding.kind
             const stateTopic = componentTopic+'/'+dingType+'_state'
 
-            // Store new ding info in camera properties
+            // Update time for most recent ding and expire time of ding (Ring seems to be 180 seconds for all dings)
             this[dingType].last_ding = Math.floor(ding.now)
             this[dingType].ding_duration = ding.expires_in
+            // Calculate new expire time for ding (ding.now + ding.expires_in)
             this[dingType].last_ding_expires = this[dingType].last_ding+ding.expires_in
             debug('Ding of type '+dingType+' received at '+ding.now+' from camera '+this.deviceId)
 
@@ -181,13 +185,12 @@ class Camera {
             // Will republish to MQTT for new dings even if ding is already active
             this.publishMqtt(mqttClient, stateTopic, 'ON', true)
 
-            // If ding was not already active, set active ding state property
-            // and begin sleep until expire time.
+            // If ding was not already active, set active ding state property and begin loop
+            // to check for ding expiration
             if (!this[dingType].active_ding) {
                 this[dingType].active_ding = true
-                // Sleep until ding expires, new dings on same device will increase expire
-                // time so code below will loop, check new expire time, and sleep again
-                // until all dings expire
+                // Loop until current time is > last_ding expires time.  Sleeps until
+                // estimated exire time, but may loop if new dings increase last_ding_expires
                 while (Math.floor(Date.now()/1000) < this[dingType].last_ding_expires) {
                     const sleeptime = (this[dingType].last_ding_expires - Math.floor(Date.now()/1000)) + 1
                     debug('Ding of type '+dingType+' from camera '+this.deviceId+' expires in '+sleeptime)
@@ -231,11 +234,33 @@ class Camera {
         }
     }
 
-    // Monitor subscriptions to ding/motion events and attempt resubscribe if false
-    monitorDingSubscriptions() {
+    // Interval loop to check communications with cameras/Ring API since, unlike alarm,
+    // there's no websocket to monitor.
+    // Also monitor subscriptions to ding/motion events and attempt resubscribe if false
+    monitorCameraConnection(mqttClient) {
         const _this = this
-        setInterval(function() {
+        setInterval(async function() {
             const camera = _this.camera
+
+            // Query camera heath, if health data doesn't return in 5 seconds assume camera is offline
+            const deviceHealth = await Promise.race([camera.getHealth(), utils.sleep(5)]).then(function(result) {
+                return result;
+            });
+            const cameraState = (deviceHealth) ? 'online' : 'offline'
+
+            // Publish camera availability state if different from prior state
+            if (_this.availabilityState !== cameraState) {
+                if (cameraState == 'offline') {
+                    _this.offline(mqttClient)
+                } else {
+                    // If camera switching to online republish discovery and state before going online
+                    _this.init(mqttClient)
+                    await utils.sleep(2)
+                    _this.online(mqttClient)
+                }
+            }
+
+            // Check for subscription to ding and motion events and attempt to resubscribe
             if (!camera.data.subscribed === true) {
                 debug('Camera Id '+camera.data.device_id+' lost subscription to ding events, attempting to resubscribe...')
                 camera.subscribeToDingEvents().catch(e => { 
@@ -299,23 +324,24 @@ class Camera {
         }
     }
 
+    // Publish availability state
+    publishAvailabilityState(mqttClient, enableDebug) {
+        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, enableDebug)
+    }
+
     // Set state topic online
     async online(mqttClient) {
-        let isDebug = true
-        // Ugly hack to keep from spamming debug log on every republish when there's no state change
-        if (this.availabilityState == 'online') { isDebug = false }
+        const enableDebug = this.availabilityState !== 'online'
         await utils.sleep(1)
         this.availabilityState = 'online'
-        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, isDebug)
+        this.publishAvailabilityState(mqttClient, enableDebug)
     }
 
     // Set state topic offline
     offline(mqttClient) {
-        let isDebug = true
-        // Ugly hack to keep from spamming debug log on every republish when there's no state change
-        if (this.availabilityState == 'offline') { isDebug = false }
+        const enableDebug = this.availabilityState !== 'offline'
         this.availabilityState = 'offline'
-        this.publishMqtt(mqttClient, this.availabilityTopic, this.availabilityState, isDebug)
+        this.publishAvailabilityState(mqttClient, enableDebug)
     }
 }
 

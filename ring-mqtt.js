@@ -2,6 +2,7 @@
 
 // Defines
 const RingApi = require ('ring-client-api').RingApi
+const RingDeviceType = require ('ring-client-api').RingDeviceType
 const mqttApi = require ('mqtt')
 const debug = require('debug')('ring-mqtt')
 const colors = require('colors/safe')
@@ -49,31 +50,42 @@ async function processExit(options, exitCode) {
 
 // Establich websocket connections and register/refresh location status on connect/disconnect
 async function processLocations(locations) {
+    // For each location get alarm devices and cameras
     ringLocations.forEach(async location => {
         const devices = await location.getDevices()
         const cameras = await location.cameras
+
+        // If this is initial publish then publish alarms and cameras
         if (!(subscribedLocations.includes(location.locationId))) {
-            var alarmPublished = false
             subscribedLocations.push(location.locationId)
             if (devices && devices.length > 0 && utils.hasAlarm(devices)) {
+                // For alarm subscribe to websocket connection monitor
                 location.onConnected.subscribe(async connected => {
                     if (connected) {
                         debug('Location '+location.locationId+' is connected')
                         publishAlarm = true
                         publishLocation(devices, cameras)
-                        alarmPublished = true
-                    } else {
-                        publishAlarm = false
-                        debug('Location '+location.locationId+' is disconnected')
                         subscribedDevices.forEach(async subscribedDevice => {
+                            // Is it an alarm device?
                             if (subscribedDevice.device) {
+                                // Set availability state online
+                                subscribedDevice.offline(mqttClient)
+                            }
+                        })
+                    } else {
+                        debug('Location '+location.locationId+' is disconnected')
+                        publishAlarm = false
+                        subscribedDevices.forEach(async subscribedDevice => {
+                            // Is it an alarm device?
+                            if (subscribedDevice.device) {
+                                // Set availability state offline
                                 subscribedDevice.offline(mqttClient)
                             }
                         })
                     }
                 })
-            }
-            if (cameras && cameras.length > 0 && !alarmPublished) {
+            // If location has no alarm but has cameras publish cameras only
+            } else if (cameras && cameras.length > 0) {
                 publishLocation(devices, cameras)
             }
         } else {
@@ -92,7 +104,7 @@ async function publishLocation(devices, cameras) {
                     publishAlarmDevice(device)
                 })
             }
-            if (cameras && cameras.length > 0) {
+            if (CONFIG.enable_cameras && cameras && cameras.length > 0) {
                 publishCameras(cameras)
             }
             await utils.sleep(1)
@@ -104,60 +116,56 @@ async function publishLocation(devices, cameras) {
     }
 }
 
-// Return class information if supported Alarm device
-function publishAlarmDevice(device) {
-    const subscribedDevice = subscribedDevices.find(d => (d.deviceId == device.zid && d.locationId == device.location.locationId))
-    var newDevice = undefined
-    if (!subscribedDevice) {
-        switch(device.deviceType) {
-            case 'sensor.contact':
-                newDevice = new ContactSensor(device, ringTopic)
-                break;
-            case 'sensor.motion':
-                newDevice = new MotionSensor(device, ringTopic)
-                break;
-            case 'sensor.zone':
-                newDevice = new ContactSensor(device, ringTopic)
-                break;
-            case 'alarm.smoke':
-                newDevice = new SmokeAlarm(device, ringTopic)
-                break;
-            case 'alarm.co':
-                newDevice = new CoAlarm(device, ringTopic)
-                break;
-            case 'listener.smoke-co':
-                newDevice = new SmokeCoListener(device, ringTopic)
-                break;
-            case 'sensor.flood-freeze':
-                newDevice = new FloodFreezeSensor(device, ringTopic)
-                break;
-            case 'security-panel':
-                newDevice = new SecurityPanel(device, ringTopic)
-                break;
-            case 'switch':
-                newDevice = new Switch(device, ringTopic)
-                break;
-            case 'switch.multilevel':
-                if (device.data.categoryId === 17) {
-                    newDevice = new Fan(device, ringTopics)
+// Return supportted alarm device class
+function getAlarmDevice(device) {
+    switch (device.deviceType) {
+        case RingDeviceType.ContactSensor:
+        case RingDeviceType.RetrofitZone:
+            return new ContactSensor(device, ringTopic)
+        case RingDeviceType.MotionSensor:
+            return new MotionSensor(device, ringTopic)
+        case RingDeviceType.FloodFreezeSensor:
+            return new FloodFreezeSensor(device, ringTopic)
+        case RingDeviceType.FreezeSensor:
+            return new FreezeSensor(device, ringTopic)
+        case RingDeviceType.SecurityPanel:
+            return new SecurityPanel(device, ringTopic)
+        case RingDeviceType.SmokeAlarm:
+            return new SmokeAlarm(device, ringTopic)
+        case RingDeviceType.CoAlarm:
+            return new CoAlarm(device, ringTopic)
+        case RingDeviceType.SmokeCoListener:
+            return new SmokeCoListener(device, ringTopic)
+        case RingDeviceType.MultiLevelSwitch:
+                if (device.categoryId == 17) {
+                    return new Fan(device, ringTopic)
                 } else {
-                    newDevice = new MultiLevelSwitch(device, ringTopic)
+                    return new MultiLevelSwitch(device, ringTopic)
                 }
-        }
-    
-        // Check if device is a lock	
-        if (/^lock($|\.)/.test(device.data.deviceType)) {
-            newDevice = new Lock(device, ringTopic)
-        }
+        case RingDeviceType.Switch:
+            return new Switch(device, ringTopic)
+        case RingDeviceType.TemperatureSensor:
+            return new TemperatureSensor(device, ringTopic)
     }
 
-    if (subscribedDevice) {
-        debug('Republishing existing device id: '+subscribedDevice.deviceId)
-        subscribedDevice.init(mqttClient)
-    } else if (newDevice) {
-        debug('Publishing new device id: '+newDevice.deviceId)
-        newDevice.init(mqttClient)
-        subscribedDevices.push(newDevice)
+    if (/^lock($|\.)/.test(device.deviceType)) {
+        return new Lock(device, ringTopic)
+    }
+
+    return null
+}
+
+// Return class information if supported Alarm device
+function publishAlarmDevice(device) {
+    const existingAlarmDevice = subscribedDevices.find(d => (d.deviceId == device.zid && d.locationId == device.location.locationId))
+    
+    if (existingAlarmDevice) {
+        debug('Republishing existing device id: '+existingAlarmDevice.deviceId)
+        existingAlarmDevice.init(mqttClient)
+    } else if (newAlarmDevice = getAlarmDevice(device)) {
+        debug('Publishing new device id: '+newAlarmDevice.deviceId)
+        newAlarmDevice.init(mqttClient)
+        subscribedDevices.push(newAlarmDevice)
     } else {
         debug('!!! Found unsupported device type: '+device.deviceType+' !!!')
     }
@@ -166,11 +174,13 @@ function publishAlarmDevice(device) {
 // Publish all cameras for a given location
 function publishCameras(cameras) {
     cameras.forEach(camera => {
-        const subscribedDevice = subscribedDevices.find(d => (d.deviceId == camera.data.device_id && d.locationId == camera.data.location_id))
-        if (subscribedDevice) {
-            subscribedDevice.init(mqttClient)
+        const existingCamera = subscribedDevices.find(d => (d.deviceId == camera.data.device_id && d.locationId == camera.data.location_id))
+        if (existingCamera) {
+            if (existingCamera.availabilityState == 'online') {
+                existingCamera.init(mqttClient)
+            }
         } else {
-            newCamera = new Camera(camera, ringTopic)
+            const newCamera = new Camera(camera, ringTopic)
             newCamera.init(mqttClient)
             subscribedDevices.push(newCamera)
         }
@@ -250,6 +260,7 @@ const main = async() => {
                 "ring_user": process.env.RINGUSER,
                 "ring_pass": process.env.RINGPASS,
                 "ring_token": process.env.RINGTOKEN,
+                "enable_cameras": process.env.ENABLECAMERAS
             }
             ringTopic = CONFIG.ring_topic ? CONFIG.ring_topic : 'ring'
             hassTopic = CONFIG.hass_topic
@@ -261,6 +272,8 @@ const main = async() => {
             process.exit(1)
         }
     }
+
+    if (!CONFIG.enable_cameras) { CONFIG.enable_cameras = false }
 
     // Establish connection to Ring API
     try {
