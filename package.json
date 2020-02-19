@@ -11,7 +11,7 @@
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ring-alarm-mqtt.js"
+    "start": "node ring-mqtt.js"
   },
   "keywords": [
     "ring",
@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/tsightler/ring-alarm-mqtt.git"
+    "url": "git://github.com/tsightler/ring-mqtt.git"
   },
   "author": "Tom Sightler (tsightler@gmail.com)",
   "license": "MIT"
